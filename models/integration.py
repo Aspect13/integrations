@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from tools import db_tools, db, rpc_tools
 
 
-class Integration(db_tools.AbstractBaseMixin, db.Base, rpc_tools.RpcMixin):
+class Integration(db_tools.AbstractBaseMixin, db.Base, rpc_tools.RpcMixin, rpc_tools.EventManagerMixin):
     __tablename__ = "integration"
     __table_args__ = (
         Index(
@@ -39,7 +39,7 @@ class Integration(db_tools.AbstractBaseMixin, db.Base, rpc_tools.RpcMixin):
         Integration.query.filter(
             Integration.id == self.id
         ).update({Integration.task_id: task_id})
-        self.insert()
+        super().insert()
 
     def insert(self):
         if not Integration.query.filter(
@@ -52,16 +52,19 @@ class Integration(db_tools.AbstractBaseMixin, db.Base, rpc_tools.RpcMixin):
         super().insert()
 
         # self.event_manager.fire
-        task_id = self.rpc.call_function_with_timeout(
-            func=f'{self.name}_created_or_updated',
-            timeout=60,
-            integration_data=self.to_json()
-        )
-        if task_id:
-            log.info('Got Task_ID: %s', task_id)
-            # self.task_id = task_id
-            # self.commit()
-            self.set_task_id(task_id)
+        self.event_manager.fire_event(f'{self.name}_created_or_updated', self.to_json())
+
+
+        # task_id = self.rpc.call_function_with_timeout(
+        #     func=f'{self.name}_created_or_updated',
+        #     timeout=60,
+        #     integration_data=self.to_json()
+        # )
+        # if task_id:
+        #     log.info('Got Task_ID: %s', task_id)
+        #     # self.task_id = task_id
+        #     # self.commit()
+        #     self.set_task_id(task_id)
 
         self.process_secret_fields()
 
